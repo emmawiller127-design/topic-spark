@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --border: #ece9e4;
+  --muted: #78716c;
+  --text: #1c1917;
+  /* 高级中性暖色，避免高饱和蓝绿 */
+  --accent: #b79767;
+  --accent-soft: #f6f1ea;
+}
+
+body {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* contenteditable 文档区：轻量排版 */
+.prose-editor {
+  line-height: 1.75;
+  color: #292524;
+  font-size: 1rem;
+}
+
+.prose-editor:focus {
+  outline: none;
+}
+
+.prose-editor h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: #1c1917;
+}
+
+.prose-editor h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.4rem;
+  color: #1c1917;
+}
+
+.prose-editor p {
+  margin-bottom: 0.75rem;
+}
+
+.prose-editor ul,
+.prose-editor ol {
+  margin: 0.5rem 0 0.75rem 1.25rem;
+}
+
+.prose-editor li {
+  margin-bottom: 0.35rem;
+}
+
+.prose-editor hr {
+  border-color: var(--border);
+}
