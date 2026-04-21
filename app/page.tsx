@@ -10,6 +10,9 @@ import {
   IconTrash,
 } from "@/components/icons";
 import { Spinner } from "@/components/Spinner";
+import { WelcomeCard } from "@/components/WelcomeCard";
+import { OnboardingHint } from "@/components/OnboardingHint";
+import { useOnboarding } from "@/components/useOnboarding";
 import type { Topic } from "@/lib/types";
 import { loadTopics, reorderTopicsByIds, saveTopics, sortTopicsForDisplay } from "@/lib/topics-storage";
 
@@ -44,35 +47,6 @@ export default function HomePage() {
   const [displayMenuOpen, setDisplayMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const displayMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const storedMode = window.localStorage.getItem(DISPLAY_MODE_STORAGE_KEY);
-    if (storedMode === "default" || storedMode === "latest" || storedMode === "category") {
-      setDisplayMode(storedMode);
-    }
-    setTopics(sortTopicsForDisplay(loadTopics()));
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    window.localStorage.setItem(DISPLAY_MODE_STORAGE_KEY, displayMode);
-  }, [displayMode, hydrated]);
-
-  useEffect(() => {
-    if (!contextMenu && !displayMenuOpen) return;
-    const close = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (contextMenu && menuRef.current && !menuRef.current.contains(target)) {
-        setContextMenu(null);
-      }
-      if (displayMenuOpen && displayMenuRef.current && !displayMenuRef.current.contains(target)) {
-        setDisplayMenuOpen(false);
-      }
-    };
-    window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
-  }, [contextMenu, displayMenuOpen]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -112,6 +86,19 @@ export default function HomePage() {
       });
   }, [filtered]);
 
+  const visibleOrderedTopics = useMemo(() => {
+    if (displayMode === "category") {
+      return groupedTopics.flatMap(([, list]) => list);
+    }
+    if (displayMode === "latest") return latestTopics;
+    return filtered;
+  }, [displayMode, filtered, groupedTopics, latestTopics]);
+
+  const onboardingTargetTopicId = useMemo(() => {
+    const preferred = visibleOrderedTopics.find((t) => t.status === "in_progress");
+    return (preferred ?? visibleOrderedTopics[0])?.id ?? null;
+  }, [visibleOrderedTopics]);
+
   const persist = (next: Topic[]) => {
     const normalized = sortTopicsForDisplay(next);
     saveTopics(normalized);
@@ -128,6 +115,41 @@ export default function HomePage() {
     setContextMenu(null);
   };
 
+  const { welcomeOpen, closeWelcome, hint, goPrev, goNext } = useOnboarding({
+    page: "home",
+    enabled: hydrated,
+    hasTopics: visibleOrderedTopics.length > 0,
+  });
+
+  useEffect(() => {
+    const storedMode = window.localStorage.getItem(DISPLAY_MODE_STORAGE_KEY);
+    if (storedMode === "default" || storedMode === "latest" || storedMode === "category") {
+      setDisplayMode(storedMode);
+    }
+    setTopics(sortTopicsForDisplay(loadTopics()));
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    window.localStorage.setItem(DISPLAY_MODE_STORAGE_KEY, displayMode);
+  }, [displayMode, hydrated]);
+
+  useEffect(() => {
+    if (!contextMenu && !displayMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (contextMenu && menuRef.current && !menuRef.current.contains(target)) {
+        setContextMenu(null);
+      }
+      if (displayMenuOpen && displayMenuRef.current && !displayMenuRef.current.contains(target)) {
+        setDisplayMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [contextMenu, displayMenuOpen]);
+
   const handleDropOn = (targetId: string) => {
     if (!draggingId || draggingId === targetId) return;
     const shown = [...filtered];
@@ -142,70 +164,75 @@ export default function HomePage() {
     setDraggingId(null);
   };
 
-  const renderTopicItem = (t: Topic) => (
-    <li
-      key={t.id}
-      draggable={displayMode === "default"}
-      onDragStart={(e) => {
-        if (displayMode !== "default") return;
-        setDraggingId(t.id);
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", t.id);
-      }}
-      onDragOver={(e) => {
-        if (displayMode !== "default") return;
-        e.preventDefault();
-      }}
-      onDrop={(e) => {
-        if (displayMode !== "default") return;
-        e.preventDefault();
-        handleDropOn(t.id);
-      }}
-      onDragEnd={() => setDraggingId(null)}
-    >
-      <button
-        type="button"
-        onContextMenu={(e) => {
-          e.preventDefault();
-          setContextMenu({ id: t.id, x: e.clientX, y: e.clientY });
-        }}
-        onClick={() => router.push(`/topic/${t.id}`)}
-        className={`focus-ring w-full rounded-2xl border border-[var(--border)] px-5 py-4 text-left shadow-sm transition hover:border-stone-300 hover:shadow ${
-          t.status === "done" ? "bg-[#f7f7f5]" : "bg-[var(--surface)]"
-        } ${draggingId === t.id ? "opacity-45" : ""}`}
-      >
-        <div className="mt-3 flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h2
-              className={`line-clamp-2 text-[15px] font-semibold leading-snug ${
-                t.status === "done" ? "text-stone-500 line-through" : "text-stone-900"
-              }`}
-            >
-              {t.title}
-            </h2>
+  const renderTopicItem = (t: Topic) => {
+    const isPeek = visibleOrderedTopics[0]?.id === t.id;
+    const isTitleTarget = t.id === onboardingTargetTopicId;
 
-            {t.status ? (
-              <div className="mt-3">
-                <span
-                  className={`inline-flex items-center rounded-full px-3 py-1 text-[13px] font-medium ${
-                    t.status === "done"
-                      ? "bg-stone-100 text-stone-600"
-                      : "bg-[var(--accent-soft)] text-stone-700"
-                  }`}
-                >
-                  {t.status === "done" ? "已完成" : "进行中"}
-                </span>
-              </div>
-            ) : null}
+    return (
+      <li
+        key={t.id}
+        draggable={displayMode === "default"}
+        onDragStart={(e) => {
+          if (displayMode !== "default") return;
+          setDraggingId(t.id);
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", t.id);
+        }}
+        onDragOver={(e) => {
+          if (displayMode !== "default") return;
+          e.preventDefault();
+        }}
+        onDrop={(e) => {
+          if (displayMode !== "default") return;
+          e.preventDefault();
+          handleDropOn(t.id);
+        }}
+        onDragEnd={() => setDraggingId(null)}
+      >
+        <button
+          type="button"
+          data-onboarding={isPeek ? "topic-item-peek" : undefined}
+          data-onboarding-card-target={isTitleTarget ? "true" : undefined}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setContextMenu({ id: t.id, x: e.clientX, y: e.clientY });
+          }}
+          onClick={() => router.push(`/topic/${t.id}`)}
+          className={`focus-ring w-full rounded-[22px] border border-black/5 bg-white/70 px-5 py-4 text-left shadow-[0_14px_34px_rgba(15,12,8,0.06),0_1px_0_rgba(15,12,8,0.03)] backdrop-blur transition hover:bg-white/85 hover:shadow-[0_18px_44px_rgba(15,12,8,0.08),0_1px_0_rgba(15,12,8,0.04)] ${
+            t.status === "done" ? "opacity-[0.92]" : ""
+          } ${draggingId === t.id ? "opacity-45" : ""}`}
+        >
+          <div className="mt-3 flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h2
+                className={`line-clamp-2 text-[15px] font-semibold leading-snug ${
+                  t.status === "done" ? "text-stone-500 line-through" : "text-stone-900"
+                }`}
+              >
+                {t.title}
+              </h2>
+
+              {t.status ? (
+                <div className="mt-3">
+                  <span
+                    className={`inline-flex items-center rounded-full bg-black/[0.035] px-3 py-1 text-[13px] font-medium ${
+                      t.status === "done" ? "text-stone-600" : "bg-[var(--accent-soft)] text-stone-700"
+                    }`}
+                  >
+                    {t.status === "done" ? "已完成" : "进行中"}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <span className="shrink-0 rounded-full bg-black/[0.03] px-2.5 py-0.5 text-xs text-stone-600 ring-1 ring-black/5">
+              {t.category}
+            </span>
           </div>
-          <span className="shrink-0 rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 text-xs text-stone-600">
-            {t.category}
-          </span>
-        </div>
-        <p className="mt-3 text-xs text-stone-400">{formatTime(t.createdAt)}</p>
-      </button>
-    </li>
-  );
+          <p className="mt-3 text-xs text-stone-400">{formatTime(t.createdAt)}</p>
+        </button>
+      </li>
+    );
+  };
 
   if (!hydrated) {
     return (
@@ -217,11 +244,14 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] pb-32">
-      <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur">
+      <WelcomeCard open={welcomeOpen} onStart={closeWelcome} />
+      <OnboardingHint hint={hint} goPrev={goPrev} goNext={goNext} />
+
+      <header className="sticky top-0 z-20 border-b border-black/5 bg-white/60 backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center gap-4 px-5 py-4">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-sm font-semibold text-stone-800 ring-1 ring-[var(--border)]"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-sm font-semibold text-stone-800 ring-1 ring-black/5"
               aria-hidden
             >
               TS
@@ -240,11 +270,11 @@ export default function HomePage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="搜索"
-              className="focus-ring w-full rounded-full border border-[var(--border)] bg-[#fcfcfb] py-1.5 pl-9 pr-3 text-sm text-stone-700 placeholder:text-stone-400"
+              className="focus-ring w-full rounded-full border border-black/5 bg-white/70 py-2 pl-9 pr-3 text-sm text-stone-700 shadow-[0_10px_30px_rgba(15,12,8,0.04)] backdrop-blur placeholder:text-stone-400"
             />
           </div>
           <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-white text-xs font-medium text-stone-600"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black/5 bg-white/60 text-xs font-medium text-stone-600 shadow-[0_10px_26px_rgba(15,12,8,0.04)] backdrop-blur"
             title="账户入口占位"
           >
             我
@@ -254,7 +284,10 @@ export default function HomePage() {
 
       <main className="mx-auto max-w-3xl px-5 py-8">
         {filtered.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-8 py-20 text-center">
+          <div
+            data-onboarding="empty-state"
+            className="rounded-[22px] border border-dashed border-black/10 bg-white/55 px-8 py-20 text-center shadow-[0_18px_44px_rgba(15,12,8,0.04)] backdrop-blur"
+          >
             <p className="text-sm text-stone-500">
               {query.trim() ? "没有匹配的选题" : "还没有选题，点击下方 + 开始记录"}
             </p>
@@ -266,7 +299,7 @@ export default function HomePage() {
                 <button
                   type="button"
                   onClick={() => setDisplayMenuOpen((open) => !open)}
-                  className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-sm font-medium text-stone-700 shadow-sm hover:bg-stone-50"
+                  className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-black/5 bg-white/70 px-3 py-1.5 text-sm font-medium text-stone-700 shadow-[0_12px_30px_rgba(15,12,8,0.05)] backdrop-blur hover:bg-white/85"
                 >
                   展示模式
                   <span className="text-stone-400">▾</span>
@@ -353,8 +386,9 @@ export default function HomePage() {
       <div className="pointer-events-none fixed bottom-8 left-0 right-0 z-30 flex justify-center px-4">
         <button
           type="button"
+          data-onboarding="create-button"
           onClick={() => router.push("/create")}
-          className="pointer-events-auto focus-ring flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-[var(--accent)] text-stone-900 shadow-lg ring-4 ring-[var(--accent-soft)] transition hover:opacity-95 active:scale-[0.98]"
+          className="pointer-events-auto focus-ring flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-[var(--accent)] text-stone-900 shadow-[0_18px_44px_rgba(183,151,103,0.22)] ring-4 ring-[var(--accent-soft)] transition hover:opacity-95 active:scale-[0.98]"
           aria-label="创建选题"
         >
           <IconPlus className="h-9 w-9" strokeWidth={2.4} />

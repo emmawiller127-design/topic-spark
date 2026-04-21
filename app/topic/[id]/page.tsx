@@ -7,6 +7,8 @@ import { DocumentToolbar } from "@/components/DocumentToolbar";
 import { IconFolder } from "@/components/icons";
 import { OutlineModal } from "@/components/OutlineModal";
 import { Spinner } from "@/components/Spinner";
+import { OnboardingHint } from "@/components/OnboardingHint";
+import { useOnboarding } from "@/components/useOnboarding";
 import { TOPIC_CATEGORIES } from "@/lib/categories";
 import { removeAppendedOutline, stripHtml } from "@/lib/html-utils";
 import { outlineToDocumentHtml } from "@/lib/outline-to-html";
@@ -34,6 +36,11 @@ export default function TopicDetailPage() {
   const [format, setFormat] = useState<ContentFormat>("note");
   const [outlineLoading, setOutlineLoading] = useState(false);
   const [outlineError, setOutlineError] = useState<string | null>(null);
+
+  const { hint, goPrev, goNext } = useOnboarding({
+    page: "topic",
+    enabled: hydrated,
+  });
 
   const persist = useCallback((updated: Topic) => {
     saveTopics(upsertTopic(loadTopics(), updated));
@@ -170,58 +177,63 @@ export default function TopicDetailPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col bg-[var(--bg)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur">
+      <OnboardingHint hint={hint} goPrev={goPrev} goNext={goNext} />
+
+      <header className="sticky top-0 z-20 border-b border-black/5 bg-white/60 backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-5 py-3">
           <button
             type="button"
             onClick={handlePrimaryAction}
-            className="focus-ring text-sm font-medium text-stone-700 transition hover:text-stone-900"
+            className="focus-ring rounded-full px-2 py-1.5 text-sm font-medium text-stone-700 transition hover:bg-black/[0.03] hover:text-stone-900"
           >
             {isEditing ? "保存" : "返回"}
           </button>
           <span className="flex-1 text-center text-xs text-stone-400">Topic Spark</span>
           <button
             type="button"
+            data-onboarding="generate-outline"
             onClick={() => {
               setOutlineError(null);
               setModalOpen(true);
             }}
-            className="focus-ring rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:bg-stone-50"
+            className="focus-ring rounded-full border border-black/5 bg-white/70 px-3.5 py-1.5 text-sm text-stone-700 shadow-[0_12px_30px_rgba(15,12,8,0.05)] backdrop-blur hover:bg-white/85"
           >
             生成大纲
           </button>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-5 pb-28 pt-8">
-        <div className="mb-6 flex items-center gap-2 text-sm text-stone-500">
-          <IconFolder className="h-4 w-4 shrink-0 text-stone-500" aria-hidden />
-          <select
-            value={category}
-            onChange={(e) => {
-              const nextCategory = e.target.value;
-              setCategory(nextCategory);
-              const cur = topicRef.current;
-              if (!cur || !editorRef.current) return;
-              persist({
-                ...cur,
-                title: title.trim() || cur.title,
-                category: nextCategory,
-                documentHtml: editorRef.current.innerHTML,
-                rawContent: stripHtml(editorRef.current.innerHTML) || cur.rawContent,
-              });
-            }}
-            className="focus-ring max-w-[70%] cursor-pointer border-none bg-transparent text-stone-700 underline decoration-stone-300 underline-offset-4"
-          >
-            {TOPIC_CATEGORIES.includes(category as (typeof TOPIC_CATEGORIES)[number]) ? null : (
-              <option value={category}>{category}</option>
-            )}
-            {TOPIC_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-5 pb-28 pt-6">
+        <div className="mb-6 rounded-[22px] border border-black/5 bg-white/55 px-4 py-3 shadow-[0_18px_44px_rgba(15,12,8,0.04)] backdrop-blur">
+          <div className="flex items-center gap-2 text-sm text-stone-500">
+            <IconFolder className="h-4 w-4 shrink-0 text-stone-500" aria-hidden />
+            <select
+              value={category}
+              onChange={(e) => {
+                const nextCategory = e.target.value;
+                setCategory(nextCategory);
+                const cur = topicRef.current;
+                if (!cur || !editorRef.current) return;
+                persist({
+                  ...cur,
+                  title: title.trim() || cur.title,
+                  category: nextCategory,
+                  documentHtml: editorRef.current.innerHTML,
+                  rawContent: stripHtml(editorRef.current.innerHTML) || cur.rawContent,
+                });
+              }}
+              className="focus-ring max-w-[70%] cursor-pointer border-none bg-transparent text-stone-700 underline decoration-stone-300 underline-offset-4"
+            >
+              {TOPIC_CATEGORIES.includes(category as (typeof TOPIC_CATEGORIES)[number]) ? null : (
+                <option value={category}>{category}</option>
+              )}
+              {TOPIC_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <input
@@ -232,13 +244,13 @@ export default function TopicDetailPage() {
             if (!isEditing) enterEditing("title");
           }}
           onChange={(e) => setTitle(e.target.value)}
-          className="focus-ring mb-8 w-full border-none bg-transparent text-3xl font-semibold tracking-tight text-stone-900 placeholder:text-stone-300 focus:ring-0"
+          className="focus-ring mb-8 w-full rounded-2xl border border-transparent bg-transparent px-0 py-2 text-3xl font-semibold tracking-tight text-stone-900 placeholder:text-stone-300 focus:bg-white/70 focus:px-4 focus:shadow-[0_18px_44px_rgba(15,12,8,0.06)] focus:ring-0"
           placeholder="标题"
         />
 
         <div
           ref={editorRef}
-          className="prose-editor focus-ring min-h-[min(55vh,560px)] rounded-xl px-0 py-1 outline-none"
+          className="prose-editor focus-ring min-h-[min(55vh,560px)] rounded-2xl border border-black/5 bg-white/55 px-4 py-4 shadow-[0_18px_44px_rgba(15,12,8,0.05)] backdrop-blur outline-none"
           contentEditable={isEditing}
           suppressContentEditableWarning
           onMouseDown={() => {
@@ -247,7 +259,7 @@ export default function TopicDetailPage() {
         />
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur">
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-black/5 bg-white/60 backdrop-blur-xl">
         <div className="mx-auto max-w-3xl px-2 py-2">
           <DocumentToolbar editorRef={editorRef} disabled={!isEditing} />
         </div>

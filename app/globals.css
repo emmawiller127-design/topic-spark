@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --bg: #ffffff;
+  --bg: #fffdf8;
   --surface: #ffffff;
-  --border: #ece9e4;
+  --border: rgba(28, 25, 23, 0.08);
   --muted: #78716c;
   --text: #1c1917;
   /* 高级中性暖色，避免高饱和蓝绿 */
@@ -15,11 +15,13 @@
 
 body {
   color: var(--text);
-  background: var(--bg);
+  background: radial-gradient(1200px 800px at 20% -10%, rgba(183, 151, 103, 0.09), transparent 60%),
+    radial-gradient(900px 700px at 110% 0%, rgba(120, 113, 108, 0.06), transparent 55%),
+    var(--bg);
 }
 
 .focus-ring:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid rgba(183, 151, 103, 0.9);
   outline-offset: 2px;
 }
 
